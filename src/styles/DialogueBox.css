@@ -1,0 +1,18 @@
+.dialogue-box {
+  border: 1px solid #ddd;
+  padding: 16px;
+  margin-top: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: #f9f9f9;
+}
+
+.dialogue-user {
+  color: blue;
+  margin-bottom: 8px;
+}
+
+.dialogue-assistant {
+  color: green;
+  margin-bottom: 8px;
+}

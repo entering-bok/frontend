@@ -1,0 +1,12 @@
+.character {
+  padding: 10px;
+  background-color: #ffecd1;
+  border: 2px solid #d4a373;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  width: 100px;
+}
+.character:hover {
+  background-color: #ffd7b5;
+}
