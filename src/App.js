@@ -10,6 +10,9 @@ function App() {
   const [error, setError] = useState(null);
   const [conversationId, setConversationId] = useState(null);
   const [selectedCharacters, setSelectedCharacters] = useState([]);
+  const [userInput, setUserInput] = useState(""); // 사용자 입력
+  const [selectedGPT, setSelectedGPT] = useState(null); // 사용자와 대화할 GPT
+  const [conversationType, setConversationType] = useState(null); // 대화 유형 ("two-gpts" or "user-gpt")
 
   const characters = [
     { id: "grandma", name: "할머니", role: "덕담과 잔소리" },
@@ -24,7 +27,12 @@ function App() {
     }
   };
 
-  // 대화 시작 요청
+  // 사용자와 대화할 GPT 선택
+  const handleSingleGPTSelect = (character) => {
+    setSelectedGPT(character);
+  };
+
+  // 두 GPT 간 대화 시작 요청
   const startConversation = async () => {
     if (selectedCharacters.length !== 2) {
       setError("두 캐릭터를 선택해야 대화를 시작할 수 있습니다.");
@@ -53,9 +61,48 @@ function App() {
       setConversationId(data.conversationId);
       setDialogues([]); // 기존 대화 초기화
       setTurn(0);
-      console.log("Conversation started with ID:", data.conversationId);
+      setConversationType("two-gpts"); // 대화 유형 설정
+      console.log("Two GPTs conversation started with ID:", data.conversationId);
     } catch (error) {
       console.error("Error starting conversation:", error);
+      setError(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 사용자와 GPT 간 대화 시작 요청
+  const startSingleConversation = async () => {
+    if (!selectedGPT) {
+      setError("대화할 GPT를 선택해주세요.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/startSingleConversation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gptId: selectedGPT.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setConversationId(data.conversationId);
+      setDialogues([]); // 기존 대화 초기화
+      setConversationType("user-gpt"); // 대화 유형 설정
+      console.log("Single GPT conversation started with ID:", data.conversationId);
+    } catch (error) {
+      console.error("Error starting single conversation:", error);
       setError(`Error: ${error.message}`);
     } finally {
       setLoading(false);
@@ -65,7 +112,7 @@ function App() {
   // 대화 계속 요청
   const continueConversation = async (userMessage, speakerId) => {
     if (!conversationId) {
-      setError("No active conversation. Please start a conversation first.");
+      setError("대화가 시작되지 않았습니다.");
       return;
     }
 
@@ -73,6 +120,7 @@ function App() {
       setLoading(true);
       setError(null);
 
+      // `two-gpts`와 `user-gpt` 대화 유형에 따라 다른 API 호출
       const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/continueConversation`, {
         method: "POST",
         headers: {
@@ -90,10 +138,8 @@ function App() {
       }
 
       const data = await response.json();
-
-      // assistant 메시지만 필터링하여 대화 업데이트
-      const filteredMessages = data.messages.filter((message) => message.role === "assistant");
-      setDialogues(filteredMessages);
+      setDialogues(data.messages); // 대화 업데이트
+      setTurn((prev) => prev + 1); // 턴 증가
     } catch (error) {
       console.error("Error continuing conversation:", error);
       setError(`Error: ${error.message}`);
@@ -102,28 +148,40 @@ function App() {
     }
   };
 
-  // 캐릭터 클릭 시 대화 요청
-  const handleDialogueClick = async () => {
-    if (turn >= 5) {
-      setError("대화가 종료되었습니다. 새로운 대화를 시작하세요.");
+  // 사용자 입력 기반 대화 요청
+  const handleUserInputSubmit = async () => {
+    if (conversationType !== "user-gpt") {
+      setError("사용자와 GPT 간 대화를 시작해야 합니다.");
       return;
     }
 
-    const userMessage =
-      turn % 2 === 0
-        ? `${selectedCharacters[0].name}의 역할에 맞는 대답을 해주세요.`
-        : `${selectedCharacters[1].name}의 역할에 맞는 대답을 해주세요.`;
+    if (!userInput.trim()) {
+      setError("입력 내용이 비어 있습니다.");
+      return;
+    }
+
+    await continueConversation(userInput, selectedGPT.id);
+    setUserInput(""); // 입력 초기화
+  };
+
+  // 두 GPT 간 대화 진행 요청
+  const handleDialogueClick = async () => {
+    if (conversationType !== "two-gpts") {
+      setError("두 GPT 간 대화를 시작해야 합니다.");
+      return;
+    }
+
+    const userMessage = null;
 
     const speakerId = turn % 2 === 0 ? selectedCharacters[0].id : selectedCharacters[1].id;
 
     await continueConversation(userMessage, speakerId);
-    setTurn((prev) => prev + 1);
   };
 
   return (
     <div className="app">
       <div className="control-panel">
-        <h2>캐릭터를 선택하세요</h2>
+        <h2>두 GPT 간 대화</h2>
         <div className="characters">
           {characters.map((character) => (
             <Character
@@ -138,6 +196,29 @@ function App() {
         {selectedCharacters.length === 2 && (
           <button onClick={startConversation}>Start Conversation</button>
         )}
+      </div>
+      <div className="user-interaction">
+        <h2>사용자와 GPT 대화</h2>
+        <div className="characters">
+          {characters.map((character) => (
+            <Character
+              key={character.id}
+              name={character.name}
+              role={character.role}
+              onClick={() => handleSingleGPTSelect(character)}
+              selected={selectedGPT?.id === character.id}
+            />
+          ))}
+        </div>
+        <button onClick={startSingleConversation}>Start GPT Conversation</button>
+        <div className="user-input">
+          <textarea
+            placeholder="여기에 메시지를 입력하세요..."
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+          />
+          <button onClick={handleUserInputSubmit}>Send</button>
+        </div>
       </div>
       <div className="dialogue-area">
         {loading && <p>Loading dialogue...</p>}
